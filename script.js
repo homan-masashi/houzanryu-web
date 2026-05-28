@@ -89,33 +89,3 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeLightbox();
 });
 
-// お問い合わせフォーム（Formspree 送信）
-const contactForm = document.querySelector('.contact-form');
-if (contactForm) {
-  contactForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const btn = contactForm.querySelector('button[type="submit"]');
-    const original = btn.textContent;
-    btn.textContent = '送信中…';
-    btn.disabled = true;
-
-    try {
-      const res = await fetch(contactForm.action, {
-        method: 'POST',
-        body: new FormData(contactForm),
-        headers: { 'Accept': 'application/json' }
-      });
-      if (res.ok) {
-        alert('お問い合わせを受け付けました。\n後ほどご連絡いたします。');
-        contactForm.reset();
-      } else {
-        alert('送信に失敗しました。しばらく後にもう一度お試しください。');
-      }
-    } catch {
-      alert('送信に失敗しました。ネットワーク接続を確認してください。');
-    }
-
-    btn.textContent = original;
-    btn.disabled = false;
-  });
-}
