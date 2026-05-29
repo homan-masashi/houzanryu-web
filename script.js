@@ -89,3 +89,27 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeLightbox();
 });
 
+// 桜の花びら
+(function () {
+  const container = document.createElement('div');
+  container.id = 'sakura-container';
+  document.body.appendChild(container);
+
+  function spawnPetal() {
+    const el = document.createElement('div');
+    el.className = 'sakura-petal';
+    const size     = 10 + Math.random() * 14;
+    const duration = 9  + Math.random() * 8;
+    el.style.left            = (Math.random() * 104 - 2) + 'vw';
+    el.style.width           = size + 'px';
+    el.style.height          = (size * 1.3) + 'px';
+    el.style.animationDuration = duration + 's';
+    el.style.opacity         = (0.55 + Math.random() * 0.4).toFixed(2);
+    container.appendChild(el);
+    setTimeout(() => el.remove(), (duration + 0.5) * 1000);
+  }
+
+  for (let i = 0; i < 7; i++) setTimeout(spawnPetal, i * 450);
+  setInterval(spawnPetal, 700);
+}());
+

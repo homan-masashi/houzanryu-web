@@ -1274,6 +1274,31 @@ ul { list-style: none; }
   transform: translateY(0);
 }
 
+/* ===== 桜の花びら ===== */
+#sakura-container {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9998;
+  overflow: hidden;
+}
+
+.sakura-petal {
+  position: absolute;
+  top: -30px;
+  background: radial-gradient(ellipse at 40% 30%, #fff8f9 0%, #ffd6de 50%, #ffb7c5 100%);
+  border-radius: 150% 0 150% 0;
+  animation: sakuraFall linear forwards;
+}
+
+@keyframes sakuraFall {
+  0%   { transform: translateY(0)    rotate(0deg)   translateX(0);    opacity: 0.9; }
+  25%  { transform: translateY(25vh) rotate(180deg) translateX(60px); opacity: 0.85; }
+  50%  { transform: translateY(50vh) rotate(360deg) translateX(-40px); opacity: 0.75; }
+  75%  { transform: translateY(75vh) rotate(540deg) translateX(50px); opacity: 0.55; }
+  100% { transform: translateY(115vh) rotate(720deg) translateX(0);   opacity: 0.15; }
+}
+
 /* ===== レスポンシブ ===== */
 @media (max-width: 900px) {
   .person-grid {
