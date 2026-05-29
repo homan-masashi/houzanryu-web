@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>タスク管理 | 峰山流</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;600;700&family=Noto+Sans+JP:wght@300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="tasks.css">
+</head>
+<body>
+
+  <!-- 認証ゲート（未ログイン時に表示） -->
+  <div id="auth-gate" hidden>
+    <div class="auth-card">
+      <div class="auth-header">
+        <p class="auth-logo-kana">ほうざんりゅう</p>
+        <p class="auth-logo-kanji">峰山流</p>
+        <p class="auth-subtitle">管理画面</p>
+      </div>
+      <form id="auth-form" novalidate>
+        <div class="form-group">
+          <label for="auth-password">パスワード</label>
+          <input type="password" id="auth-password" placeholder="パスワードを入力" autocomplete="current-password" required>
+          <p id="auth-error" hidden class="form-error">パスワードが違います</p>
+        </div>
+        <button type="submit" class="btn-auth-login">ログイン</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- メインコンテンツ（認証後に表示） -->
+  <div id="main-content" hidden>
+
+    <!-- ナビゲーション -->
+    <header class="site-header">
+      <div class="header-inner">
+        <a href="index.html" class="site-logo">
+          <span class="logo-kana">ほうざんりゅう</span>
+          <span class="logo-kanji">峰山流</span>
+          <span class="logo-sub">日本舞踊</span>
+        </a>
+        <nav class="site-nav">
+          <ul>
+            <li><a href="index.html#about">流派について</a></li>
+            <li><a href="index.html#lessons">お稽古・教室案内</a></li>
+            <li><a href="index.html#gallery">ギャラリー</a></li>
+            <li><a href="index.html#events">公演・イベント</a></li>
+            <li><a href="index.html#contact">お問い合わせ</a></li>
+            <li><a href="tasks.html" class="nav-active">管理</a></li>
+          </ul>
+        </nav>
+        <div class="sns-links">
+          <a href="https://www.instagram.com/houzanryu_japan/" class="sns-link" aria-label="Instagram" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+          </a>
+        </div>
+        <button class="nav-toggle" aria-label="メニュー">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+    </header>
+
+    <main>
+      <section class="section section-tasks">
+        <div class="container">
+
+          <div class="section-header">
+            <p class="section-en">TASK MANAGEMENT</p>
+            <h2 class="section-title">タスク管理</h2>
+            <div class="section-line"></div>
+          </div>
+
+          <div class="tasks-toolbar">
+            <button class="tasks-add-btn" id="btn-add-task">
+              <span class="tasks-add-icon">＋</span>タスクを追加
+            </button>
+            <div class="tasks-filter-tabs" role="tablist" aria-label="ステータスフィルター">
+              <button class="filter-tab active" data-filter="all" role="tab" aria-selected="true">
+                全て <span class="tab-count" id="count-all">0</span>
+              </button>
+              <button class="filter-tab" data-filter="todo" role="tab" aria-selected="false">
+                未着手 <span class="tab-count" id="count-todo">0</span>
+              </button>
+              <button class="filter-tab" data-filter="inprogress" role="tab" aria-selected="false">
+                進行中 <span class="tab-count" id="count-inprogress">0</span>
+              </button>
+              <button class="filter-tab" data-filter="done" role="tab" aria-selected="false">
+                完了 <span class="tab-count" id="count-done">0</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="tasks-list" id="tasks-list"></div>
+
+          <div class="tasks-empty" id="tasks-empty" hidden>
+            <div class="tasks-empty-inner">
+              <p class="tasks-empty-msg">タスクがありません</p>
+              <p class="tasks-empty-hint">「タスクを追加」から新しいタスクを作成してください。</p>
+            </div>
+          </div>
+
+        </div>
+      </section>
+    </main>
+
+    <!-- タスク追加・編集モーダル -->
+    <div class="modal-overlay" id="task-modal" hidden aria-modal="true" role="dialog" aria-labelledby="modal-title">
+      <div class="modal-inner">
+        <button class="modal-close" id="modal-close" aria-label="閉じる">✕</button>
+        <h2 class="modal-title" id="modal-title">タスクを追加</h2>
+
+        <form id="task-form" novalidate>
+          <div class="form-group">
+            <label for="task-title">タスク名 <span class="required">必須</span></label>
+            <input type="text" id="task-title" placeholder="タスク名を入力" required>
+            <p class="form-error" id="title-error" hidden>タスク名を入力してください</p>
+          </div>
+
+          <div class="form-group">
+            <label for="task-desc">詳細メモ</label>
+            <textarea id="task-desc" rows="3" placeholder="詳細や備考があればここに記入"></textarea>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="task-status">ステータス</label>
+              <select id="task-status">
+                <option value="todo">未着手</option>
+                <option value="inprogress">進行中</option>
+                <option value="done">完了</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="task-priority">優先度</label>
+              <select id="task-priority">
+                <option value="high">高</option>
+                <option value="medium" selected>中</option>
+                <option value="low">低</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="task-category">カテゴリ</label>
+              <select id="task-category">
+                <option value="稽古">稽古</option>
+                <option value="発表会">発表会</option>
+                <option value="事務">事務</option>
+                <option value="その他">その他</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="task-due">期限日</label>
+              <input type="date" id="task-due">
+            </div>
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" class="btn-modal-cancel" id="modal-cancel">キャンセル</button>
+            <button type="submit" class="btn-modal-save">保存</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <div class="footer-logo">
+          <span class="logo-kana">ほうざんりゅう</span>
+          <span class="logo-kanji">峰山流</span>
+          <span class="logo-sub">日本舞踊</span>
+        </div>
+        <nav class="footer-nav">
+          <a href="index.html#about">流派について</a>
+          <a href="index.html#lessons">お稽古・教室案内</a>
+          <a href="index.html#gallery">ギャラリー</a>
+          <a href="index.html#events">公演・イベント</a>
+          <a href="index.html#contact">お問い合わせ</a>
+        </nav>
+        <p class="footer-copy">© 2026 峰山流 日本舞踊. All Rights Reserved.</p>
+      </div>
+    </footer>
+
+  </div><!-- /#main-content -->
+
+  <script src="tasks.js"></script>
+</body>
+</html>
