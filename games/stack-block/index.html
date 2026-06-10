@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Stack Block</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#1a1a2e; display:flex; justify-content:center; align-items:center; height:100vh; overflow:hidden; font-family:'Segoe UI',sans-serif; touch-action:none; }
+#wrapper { position:relative; width:400px; height:600px; }
+canvas { display:block; width:100%; height:100%; cursor:pointer; }
+.overlay { position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:20px; }
+.hidden { display:none !important; }
+.title { font-size:52px; font-weight:900; color:#fff; text-shadow:0 0 20px #7c3aed,0 0 40px #7c3aed; letter-spacing:6px; }
+.subtitle { font-size:14px; color:#a78bfa; text-align:center; line-height:1.8; }
+.btn { padding:14px 44px; font-size:18px; font-weight:700; border:none; border-radius:50px; cursor:pointer; transition:transform 0.1s; }
+.btn:active { transform:scale(0.95); }
+.btn-primary { background:linear-gradient(135deg,#7c3aed,#db2777); color:#fff; box-shadow:0 0 24px rgba(124,58,237,0.6); }
+.btn-secondary { background:rgba(255,255,255,0.08); color:#fff; border:1px solid rgba(255,255,255,0.2); }
+#score-text { font-size:26px; color:#fff; font-weight:700; }
+#best-text  { font-size:14px; color:#a78bfa; }
+#toast { position:absolute; bottom:28px; left:50%; transform:translateX(-50%); background:rgba(124,58,237,0.9); color:#fff; padding:10px 24px; border-radius:20px; font-size:14px; opacity:0; transition:opacity 0.3s; pointer-events:none; white-space:nowrap; }
+#toast.show { opacity:1; }
+</style>
+</head>
+<body>
+<div id="wrapper">
+  <canvas id="c" width="400" height="600"></canvas>
+  <div id="ov-start" class="overlay">
+    <div class="title">STACK</div>
+    <div class="subtitle">タップしてブロックを積み上げよう！<br>ぴったり重ねると <strong style="color:#fde68a">PERFECT +4</strong>！<br><span style="color:#60a5fa">🎩 たまに特別なブロックが出るよ！</span></div>
+    <button class="btn btn-primary" id="btn-start">START</button>
+  </div>
+  <div id="ov-over" class="overlay hidden">
+    <div class="title" style="font-size:36px">GAME OVER</div>
+    <div id="score-text">スコア: 0</div>
+    <div id="best-text">ベスト: 0</div>
+    <button class="btn btn-primary" id="btn-retry">もう一度</button>
+    <button class="btn btn-secondary" id="btn-share">スコアをシェア</button>
+  </div>
+  <div id="toast"></div>
+</div>
+<script>
+(function(){
+  var canvas = document.getElementById('c');
+  var ctx    = canvas.getContext('2d');
+  var W = 400, H = 600;
+  var STATE  = {START:0,PLAYING:1,OVER:2};
+  var state  = STATE.START;
+  var blocks = [], movingBlock = null, fallingDebris = [];
+  var score  = 0;
+  var bestScore = parseInt(localStorage.getItem('stackBest')||'0',10);
+  var hue = 200, flashAlpha = 0, flashColor = 'rgba(255,255,255,';
+  var popAnim = null, rafId = null;
+  var blockCount = 0, nextFaceIn = 3;
+
+  var faceImg = new Image();
+  faceImg.src = 'face.png';
+
+  // 顔ブロック：高さ90px、縦横比 1453:1547
+  var FACE_H    = 90;
+  var IMG_RATIO = 1453 / 1547;  // ≈ 0.939（ほぼ正方形）
+
+  var AC = new (window.AudioContext||window.webkitAudioContext)();
+  function beep(f,d,t,v){ t=t||'sine';v=v||0.15; try{ var o=AC.createOscillator(),g=AC.createGain(); o.connect(g);g.connect(AC.destination); o.type=t; o.frequency.setValueAtTime(f,AC.currentTime); g.gain.setValueAtTime(v,AC.currentTime); g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+d); o.start();o.stop(AC.currentTime+d); }catch(e){} }
+  function sfxDrop()    { beep(350,0.08,'triangle'); }
+  function sfxPerfect() { [440,660,880].forEach(function(f,i){ setTimeout(function(){ beep(f,0.12); },i*70); }); }
+  function sfxOver()    { [280,230,190,150].forEach(function(f,i){ setTimeout(function(){ beep(f,0.18,'sawtooth'); },i*90); }); }
+  function sfxFace()    { [523,659,784,1047].forEach(function(f,i){ setTimeout(function(){ beep(f,0.15); },i*60); }); }
+  function resumeAC()   { if(AC.state==='suspended') AC.resume(); }
+
+  function blockFill(h){ return 'hsl('+(h%360)+',75%,60%)'; }
+  function blockGlow(h){ return 'hsl('+(h%360)+',90%,75%)'; }
+
+  function drawBlock(b,alpha,rot){
+    alpha=(alpha===undefined)?1:alpha; rot=rot||0;
+    ctx.save(); ctx.globalAlpha=alpha;
+    if(rot){ var cx=b.x+b.w/2,cy=b.y+b.h/2; ctx.translate(cx,cy);ctx.rotate(rot);ctx.translate(-cx,-cy); }
+    ctx.shadowColor=blockGlow(b.hue); ctx.shadowBlur=14;
+    ctx.fillStyle=blockFill(b.hue); ctx.fillRect(b.x,b.y,b.w,b.h);
+    ctx.fillStyle='rgba(255,255,255,0.18)'; ctx.fillRect(b.x,b.y,b.w,6);
+    ctx.shadowBlur=0; ctx.restore();
+  }
+
+  function drawFaceBlock(b,alpha,rot){
+    alpha=(alpha===undefined)?1:alpha; rot=rot||0;
+    ctx.save(); ctx.globalAlpha=alpha;
+    if(rot){ var cx=b.x+b.w/2,cy=b.y+b.h/2; ctx.translate(cx,cy);ctx.rotate(rot);ctx.translate(-cx,-cy); }
+
+    var t   = Date.now()/400;
+    var glH = (t*60)%360;
+
+    if(faceImg.complete && faceImg.naturalWidth>0){
+      // 高さ基準でフィット、中央寄せ
+      var imgH = b.h;
+      var imgW = imgH * IMG_RATIO;
+      var imgX = b.x + (b.w - imgW) / 2;
+      var imgY = b.y;
+
+      ctx.shadowColor = 'hsl('+glH+',100%,70%)';
+      ctx.shadowBlur  = 22;
+      ctx.drawImage(faceImg, imgX, imgY, imgW, imgH);
+      ctx.shadowBlur = 0;
+
+      // 周回スパークル
+      for(var i=0;i<4;i++){
+        var ang = t*2+(i/4)*Math.PI*2;
+        var r   = imgW*0.65;
+        ctx.beginPath();
+        ctx.arc(imgX+imgW/2+Math.cos(ang)*r, imgY+imgH/2+Math.sin(ang)*r, 5,0,Math.PI*2);
+        ctx.fillStyle='hsl('+((glH+i*90)%360)+',100%,80%)';
+        ctx.fill();
+      }
+    } else {
+      ctx.fillStyle='#1e3a8a';
+      ctx.fillRect(b.x,b.y,b.w,b.h);
+    }
+    ctx.restore();
+  }
+
+  function drawAny(b,alpha,rot){
+    if(b.isFace) drawFaceBlock(b,alpha,rot);
+    else         drawBlock(b,alpha,rot);
+  }
+
+  function drawGrid(){
+    ctx.strokeStyle='rgba(255,255,255,0.03)'; ctx.lineWidth=1;
+    for(var x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+    for(var y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  }
+
+  function drawHUD(){
+    ctx.save(); ctx.textAlign='center';
+    ctx.shadowColor='#7c3aed'; ctx.shadowBlur=12;
+    ctx.fillStyle='#fff'; ctx.font='bold 36px Segoe UI';
+    ctx.fillText(score,W/2,52); ctx.shadowBlur=0;
+    ctx.fillStyle='#a78bfa'; ctx.font='14px Segoe UI';
+    ctx.fillText('BEST:'+bestScore,W/2,72); ctx.restore();
+  }
+
+  function init(){
+    blocks=[]; fallingDebris=[]; movingBlock=null;
+    score=0; hue=200; flashAlpha=0; popAnim=null;
+    blockCount=0; nextFaceIn=3;
+    var bw=200,bx=(W-bw)/2;
+    blocks.push({x:bx,y:H-40,w:bw,h:30,hue:hue,isFace:false});
+    spawnMoving();
+  }
+
+  function spawnMoving(){
+    var prev  = blocks[blocks.length-1];
+    hue += 18;
+    var speed = Math.min(2.2+score*0.18,9);
+    blockCount++;
+    var isFace = (blockCount >= nextFaceIn);
+    if(isFace) nextFaceIn = blockCount+4+Math.floor(Math.random()*3);
+    var bh = isFace ? FACE_H : 30;
+    movingBlock = {x:0, y:prev.y-bh-4, w:prev.w, h:bh, hue:hue, dir:1, speed:speed, isFace:isFace};
+  }
+
+  function place(){
+    if(state!==STATE.PLAYING||!movingBlock) return;
+    resumeAC();
+    var prev=blocks[blocks.length-1], mb=movingBlock;
+    var ol=Math.max(mb.x,prev.x), or=Math.min(mb.x+mb.w,prev.x+prev.w), ow=or-ol;
+    if(ow<=0){
+      fallingDebris.push({x:mb.x,y:mb.y,w:mb.w,h:mb.h,hue:mb.hue,isFace:mb.isFace,vy:0,vr:(Math.random()-0.5)*0.08,rot:0});
+      movingBlock=null; endGame(); return;
+    }
+    var diff=Math.abs(mb.x-prev.x), isPerfect=(diff<5), isFace=mb.isFace;
+    var pts=1; if(isPerfect) pts+=3; if(isFace) pts+=4;
+    if(mb.x<prev.x)
+      fallingDebris.push({x:mb.x,y:mb.y,w:prev.x-mb.x,h:mb.h,hue:mb.hue,isFace:isFace,vy:0,vr:-0.06,rot:0});
+    else if(mb.x+mb.w>prev.x+prev.w){
+      var cx2=prev.x+prev.w;
+      fallingDebris.push({x:cx2,y:mb.y,w:(mb.x+mb.w)-cx2,h:mb.h,hue:mb.hue,isFace:isFace,vy:0,vr:0.06,rot:0});
+    }
+    blocks.push({x:ol,y:mb.y,w:ow,h:mb.h,hue:mb.hue,isFace:isFace});
+    score+=pts;
+    if(isFace&&isPerfect){
+      flashAlpha=0.5; flashColor='rgba(255,220,50,';
+      popAnim={label:'かわいい！ PERFECT +8',alpha:1,y:mb.y-8,color:'#fde68a'};
+      sfxFace(); sfxPerfect();
+    }else if(isFace){
+      flashAlpha=0.35; flashColor='rgba(100,180,255,';
+      popAnim={label:'かわいい！ +5',alpha:1,y:mb.y-8,color:'#93c5fd'};
+      sfxFace();
+    }else if(isPerfect){
+      flashAlpha=0.45; flashColor='rgba(255,255,255,';
+      popAnim={label:'PERFECT! +4',alpha:1,y:mb.y-8,color:'#fde68a'};
+      sfxPerfect();
+    }else{ sfxDrop(); }
+    movingBlock=null;
+    var topY=blocks[blocks.length-1].y;
+    if(topY<H/2){
+      var shift=H/2-topY;
+      blocks.forEach(function(b){b.y+=shift;});
+      fallingDebris.forEach(function(b){b.y+=shift;});
+    }
+    spawnMoving();
+  }
+
+  function endGame(){
+    sfxOver(); state=STATE.OVER;
+    if(score>bestScore){bestScore=score;localStorage.setItem('stackBest',bestScore);}
+    document.getElementById('score-text').textContent='スコア: '+score;
+    document.getElementById('best-text').textContent='ベスト: '+bestScore;
+    document.getElementById('ov-over').classList.remove('hidden');
+  }
+
+  function startGame(){
+    document.getElementById('ov-start').classList.add('hidden');
+    document.getElementById('ov-over').classList.add('hidden');
+    state=STATE.PLAYING; init();
+    if(!rafId) loop();
+  }
+
+  function share(){
+    var text='Stack Block で '+score+' 段積んだ！ ベスト:'+bestScore+' チャレンジしてみて！';
+    if(navigator.share){navigator.share({title:'Stack Block',text:text});}
+    else{navigator.clipboard.writeText(text).then(function(){showToast('コピーしました！');}).catch(function(){showToast('コピーできませんでした');});}
+  }
+
+  function showToast(msg){
+    var el=document.getElementById('toast'); el.textContent=msg;
+    el.classList.add('show'); setTimeout(function(){el.classList.remove('show');},2600);
+  }
+
+  function loop(){
+    rafId=requestAnimationFrame(loop);
+    ctx.clearRect(0,0,W,H); ctx.fillStyle='#1a1a2e'; ctx.fillRect(0,0,W,H);
+    drawGrid();
+    if(state===STATE.START) return;
+    if(flashAlpha>0){
+      ctx.fillStyle=flashColor+flashAlpha+')'; ctx.fillRect(0,0,W,H);
+      flashAlpha=Math.max(0,flashAlpha-0.025);
+    }
+    blocks.forEach(function(b){drawAny(b);});
+    fallingDebris=fallingDebris.filter(function(b){return b.y<H+140;});
+    fallingDebris.forEach(function(b){
+      b.vy+=0.45; b.y+=b.vy; b.rot+=b.vr;
+      drawAny(b,Math.max(0,1-b.y/H),b.rot);
+    });
+    if(state===STATE.PLAYING&&movingBlock){
+      movingBlock.x+=movingBlock.dir*movingBlock.speed;
+      if(movingBlock.x+movingBlock.w>=W){movingBlock.dir=-1;movingBlock.x=W-movingBlock.w;}
+      if(movingBlock.x<=0){movingBlock.dir=1;movingBlock.x=0;}
+      drawAny(movingBlock);
+    }
+    if(popAnim){
+      ctx.save(); ctx.globalAlpha=popAnim.alpha; ctx.textAlign='center';
+      ctx.fillStyle=popAnim.color; ctx.shadowColor=popAnim.color; ctx.shadowBlur=16;
+      ctx.font='bold 22px Segoe UI'; ctx.fillText(popAnim.label,W/2,popAnim.y);
+      ctx.restore(); popAnim.y-=1.3; popAnim.alpha-=0.018;
+      if(popAnim.alpha<=0) popAnim=null;
+    }
+    if(state===STATE.PLAYING) drawHUD();
+  }
+
+  canvas.addEventListener('click',place);
+  canvas.addEventListener('touchstart',function(e){e.preventDefault();place();},{passive:false});
+  document.getElementById('btn-start').addEventListener('click',startGame);
+  document.getElementById('btn-retry').addEventListener('click',startGame);
+  document.getElementById('btn-share').addEventListener('click',share);
+  loop();
+})();
+</script>
+</body>
+</html>
