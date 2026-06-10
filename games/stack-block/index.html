@@ -7,7 +7,7 @@
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 body { background:#1a1a2e; display:flex; justify-content:center; align-items:center; height:100vh; overflow:hidden; font-family:'Segoe UI',sans-serif; touch-action:none; }
-#wrapper { position:relative; width:400px; height:600px; }
+#wrapper { position:relative; width:400px; height:600px; transform-origin:top center; }
 canvas { display:block; width:100%; height:100%; cursor:pointer; }
 .overlay { position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:20px; }
 .hidden { display:none !important; }
@@ -262,6 +262,18 @@ canvas { display:block; width:100%; height:100%; cursor:pointer; }
   document.getElementById('btn-start').addEventListener('click',startGame);
   document.getElementById('btn-retry').addEventListener('click',startGame);
   document.getElementById('btn-share').addEventListener('click',share);
+
+  // スマホ対応：画面サイズに合わせてスケール
+  function fitScreen(){
+    var s = Math.min(window.innerWidth/400, window.innerHeight/600, 1);
+    var wrapper = document.getElementById('wrapper');
+    wrapper.style.transform = 'scale('+s+')';
+    // body の高さを wrapper の実表示高さに合わせてセンタリング
+    document.body.style.alignItems = 'center';
+  }
+  window.addEventListener('resize', fitScreen);
+  fitScreen();
+
   loop();
 })();
 </script>
