@@ -372,8 +372,8 @@ let scrollX=0, score=0, lives=3, coinCount=0;
 let level, player;
 const coinPops=[], scoreFloats=[];
 
-function makePlayer() {
-  return { x:48, y:H-32-PH, w:PW, h:PH,
+function makePlayer(startX) {
+  return { x: startX ?? 48, y:H-32-PH, w:PW, h:PH,
            vx:0, vy:0, onGround:false, facing:1,
            animFrame:0, animT:0, invincible:0, dead:false, deadT:0 };
 }
@@ -539,7 +539,11 @@ function killPlayer(){
   p.dead=true; p.deadT=110; p.vy=-7.5; p.vx=0; p.invincible=110;
   sfx('die');
 }
-function resetPlayer(){ player=makePlayer(); scrollX=0; }
+function resetPlayer(){
+  // 死んだ場所の少し手前からリスタート（scrollX はそのまま保持）
+  const respawnX = Math.max(scrollX + 32, 48);
+  player = makePlayer(respawnX);
+}
 
 // ── Draw helpers ─────────────────────────────────────────────────
 function sx(wx){ return wx-scrollX; }
@@ -669,7 +673,7 @@ function drawFlag(){
 
 // ── Player sprite using character image ───────────────────────────
 // Visual display size (screen pixels)
-const CHAR_W = 72, CHAR_H = 81; // keeps 1952:2198 ≈ 0.89 aspect ratio
+const CHAR_W = 50, CHAR_H = 56; // keeps 1952:2198 ≈ 0.89 aspect ratio
 
 function drawPlayer(){
   const p = player;
