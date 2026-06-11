@@ -111,8 +111,54 @@ const W = 480, H = 320, TILE = 16;
   resize(); window.addEventListener('resize', resize);
 })();
 
-// ── Character image (Gemini generated pixel art) ─────────────────
+// ── Character image – background removed at load time ────────────
 const charImg = new Image();
+let charCanvas = null; // transparent-background sprite
+
+function removeBackground(img) {
+  const w = img.naturalWidth, h = img.naturalHeight;
+  const oc = document.createElement('canvas');
+  oc.width = w; oc.height = h;
+  const ox = oc.getContext('2d');
+  ox.drawImage(img, 0, 0);
+
+  const id = ox.getImageData(0, 0, w, h);
+  const d  = id.data;
+
+  // Mark background pixels via stack-based flood-fill from all 4 edges.
+  // Background = bright grey/white (R,G,B all > 190).
+  // Stops at character's colored pixels, so white gloves (enclosed by
+  // red/blue pixels) are NOT consumed.
+  const bg = new Uint8Array(w * h);
+  const stk = [];
+
+  function tryPush(x, y) {
+    if (x < 0 || x >= w || y < 0 || y >= h) return;
+    const idx = y * w + x;
+    if (bg[idx]) return;
+    const i = idx << 2;
+    if (d[i] > 190 && d[i+1] > 190 && d[i+2] > 190) {
+      bg[idx] = 1; stk.push(idx);
+    }
+  }
+
+  for (let x = 0; x < w; x++) { tryPush(x, 0); tryPush(x, h-1); }
+  for (let y = 0; y < h; y++) { tryPush(0, y); tryPush(w-1, y); }
+
+  while (stk.length) {
+    const idx = stk.pop();
+    const x = idx % w, y = (idx / w) | 0;
+    tryPush(x+1,y); tryPush(x-1,y); tryPush(x,y+1); tryPush(x,y-1);
+  }
+
+  // Erase background pixels (alpha → 0)
+  for (let i = 0; i < w * h; i++) { if (bg[i]) d[(i<<2)+3] = 0; }
+
+  ox.putImageData(id, 0, 0);
+  return oc;
+}
+
+charImg.onload = () => { charCanvas = removeBackground(charImg); };
 charImg.src = 'char.png';
 
 // ── Audio ───────────────────────────────────────────────────────
@@ -658,10 +704,14 @@ function drawPlayer(){
 }
 
 function drawCharSprite(x, y){
-  if(charImg.complete && charImg.naturalWidth > 0){
+  if(charCanvas){
+    // Transparent-background processed sprite
+    ctx.drawImage(charCanvas, 0, 0, charCanvas.width, charCanvas.height, x, y, CHAR_W, CHAR_H);
+  } else if(charImg.complete && charImg.naturalWidth > 0){
+    // Still processing – draw raw image as fallback
     ctx.drawImage(charImg, 0, 0, 1952, 2198, x, y, CHAR_W, CHAR_H);
   } else {
-    // Fallback pixel art until image loads
+    // Pixel art placeholder while image loads
     ctx.fillStyle=C.hatRed;  ctx.fillRect(x+8,y,56,18);
     ctx.fillStyle=C.skin;    ctx.fillRect(x+10,y+18,52,36);
     ctx.fillStyle=C.overalls;ctx.fillRect(x+6,y+54,60,27);
@@ -685,8 +735,11 @@ function drawHUD(){
   ctx.textBaseline='middle';
 
   // Lives: キャラアイコン + 天斗×3
-  if(charImg.complete && charImg.naturalWidth>0){
-    ctx.drawImage(charImg, 0,0,1952,2198, 4,2,14,16);
+  const hudSrc = charCanvas || (charImg.complete && charImg.naturalWidth>0 ? charImg : null);
+  if(hudSrc){
+    const sw = charCanvas ? charCanvas.width : 1952;
+    const sh = charCanvas ? charCanvas.height : 2198;
+    ctx.drawImage(hudSrc, 0, 0, sw, sh, 4, 1, 14, 18);
   }
   ctx.font='bold 9px monospace';
   ctx.fillStyle='#FFD700'; ctx.textAlign='left';
