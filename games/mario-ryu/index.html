@@ -111,9 +111,9 @@ const W = 480, H = 320, TILE = 16;
   resize(); window.addEventListener('resize', resize);
 })();
 
-// ── Face image ──────────────────────────────────────────────────
-const faceImg = new Image();
-faceImg.src = 'face.jpg';
+// ── Character image (Gemini generated pixel art) ─────────────────
+const charImg = new Image();
+charImg.src = 'char.png';
 
 // ── Audio ───────────────────────────────────────────────────────
 let AC = null, soundOn = false;
@@ -621,100 +621,53 @@ function drawFlag(){
   ctx.fillStyle='#8B0000'; ctx.fillRect(x-8,f.y+f.h+22,16,26);
 }
 
-// ── Player (drawn at 2x scale with face clearly visible) ─────────
+// ── Player sprite using character image ───────────────────────────
+// Visual display size (screen pixels)
+const CHAR_W = 72, CHAR_H = 81; // keeps 1952:2198 ≈ 0.89 aspect ratio
+
 function drawPlayer(){
-  const p=player;
+  const p = player;
   if(p.invincible>0 && Math.floor(p.invincible/3)%2===0) return;
+
+  // Walking bob: slight up/down bounce
+  const bob = (p.onGround && Math.abs(p.vx)>0.3)
+    ? Math.sin(p.animT * 0.45) * 2.5
+    : 0;
+
+  // Position: feet align with hitbox bottom, centered on hitbox
+  const drawX = sx(p.x + p.w/2) - CHAR_W/2;
+  const drawY = p.y + p.h - CHAR_H + bob;
+
   ctx.save();
-  // Place feet at hitbox bottom, centered horizontally
-  const cx = sx(p.x + p.w/2); // horizontal center on screen
-  const by = p.y + p.h;        // feet position (hitbox bottom)
-  ctx.translate(cx, by);
-  ctx.scale(p.facing*2, 2);    // 2x scale, flip for direction
-  // In 1x coords: sprite is 16px wide, 32px tall (head+body)
-  // Translate so feet (bottom of sprite) is at origin
-  ctx.translate(-8, -32);
-  drawChar(0, 0, p.animFrame, !p.onGround, p.dead);
+
+  if(p.dead){
+    // Flip upside-down on death
+    ctx.translate(drawX + CHAR_W/2, drawY + CHAR_H/2);
+    ctx.rotate(Math.PI);
+    drawCharSprite(-CHAR_W/2, -CHAR_H/2);
+  } else if(p.facing < 0){
+    // Mirror horizontally when facing left
+    ctx.translate(drawX + CHAR_W, drawY);
+    ctx.scale(-1, 1);
+    drawCharSprite(0, 0);
+  } else {
+    drawCharSprite(drawX, drawY);
+  }
+
   ctx.restore();
 }
 
-function drawChar(x,y,frame,jumping,dead){
-  if(dead){
-    drawBody(x,y+15,0);
-    drawHead(x,y);
-    ctx.fillStyle=C.shirt;
-    ctx.fillRect(x-4,y+17,4,8); ctx.fillRect(x+16,y+17,4,8);
-    ctx.fillStyle='#fff';
-    ctx.fillRect(x-5,y+14,5,5); ctx.fillRect(x+16,y+14,5,5);
-    return;
-  }
-  drawBody(x,y+15,frame);
-  drawHead(x,y);
-  if(jumping){
-    ctx.fillStyle=C.shirt;
-    ctx.fillRect(x-4,y+16,4,7); ctx.fillRect(x+16,y+16,4,7);
-    ctx.fillStyle='#fff';
-    ctx.fillRect(x-5,y+13,5,5); ctx.fillRect(x+16,y+13,5,5);
+function drawCharSprite(x, y){
+  if(charImg.complete && charImg.naturalWidth > 0){
+    ctx.drawImage(charImg, 0, 0, 1952, 2198, x, y, CHAR_W, CHAR_H);
   } else {
-    ctx.fillStyle=C.shirt;
-    ctx.fillRect(x-2,y+18,3,8); ctx.fillRect(x+15,y+18,3,8);
-    ctx.fillStyle='#fff';
-    ctx.fillRect(x-3,y+24,4,5); ctx.fillRect(x+15,y+24,4,5);
+    // Fallback pixel art until image loads
+    ctx.fillStyle=C.hatRed;  ctx.fillRect(x+8,y,56,18);
+    ctx.fillStyle=C.skin;    ctx.fillRect(x+10,y+18,52,36);
+    ctx.fillStyle=C.overalls;ctx.fillRect(x+6,y+54,60,27);
+    ctx.fillStyle=C.shoe;    ctx.fillRect(x+6,y+72,25,9);
+    ctx.fillRect(x+41,y+72,25,9);
   }
-}
-
-function drawHead(x,y){
-  // Hat brim
-  ctx.fillStyle=C.hatRed;
-  ctx.fillRect(x-1,y+10,18,3);
-  // Hat top
-  ctx.fillRect(x+1,y+3,14,8);
-  ctx.fillRect(x+3,y,10,5);
-  // M badge
-  ctx.fillStyle='#fff'; ctx.fillRect(x+5,y+4,6,5);
-  ctx.fillStyle=C.hatRed;
-  ctx.font='bold 6px monospace'; ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillText('M',x+8,y+6.5);
-
-  // Skin face
-  ctx.fillStyle=C.skin;
-  ctx.fillRect(x+1,y+13,14,12);
-
-  // Ponytail
-  ctx.fillStyle=C.hair;
-  ctx.fillRect(x+13,y+11,7,4); ctx.fillRect(x+15,y+15,6,3); ctx.fillRect(x+16,y+18,5,2);
-
-  // ── Face photo (clearly visible at 2x = 28×24 screen pixels) ──
-  if(faceImg.complete && faceImg.naturalWidth>0){
-    ctx.save();
-    ctx.globalAlpha=0.92;
-    ctx.beginPath(); ctx.rect(x+1,y+13,14,12); ctx.clip();
-    // Crop: center face area in original 1952×2198 image
-    ctx.drawImage(faceImg, 450,220,1000,900, x+1,y+13,14,12);
-    ctx.restore();
-  } else {
-    // Fallback if image not loaded
-    ctx.fillStyle='#000'; ctx.fillRect(x+3,y+15,3,3); ctx.fillRect(x+9,y+15,3,3);
-    ctx.fillStyle=C.mustache; ctx.fillRect(x+2,y+19,12,2);
-    ctx.fillStyle=C.skinDark; ctx.fillRect(x+6,y+16,4,3);
-  }
-}
-
-function drawBody(x,y,frame){
-  // Overalls
-  ctx.fillStyle=C.overalls; ctx.fillRect(x+2,y,12,13);
-  // Shirt sides
-  ctx.fillStyle=C.shirt; ctx.fillRect(x,y,2,9); ctx.fillRect(x+14,y,2,9);
-  // Buttons
-  ctx.fillStyle='#FFD700'; ctx.fillRect(x+5,y+2,2,2); ctx.fillRect(x+9,y+2,2,2);
-
-  const lo=frame===1?2:frame===2?-1:0;
-  // Left leg
-  ctx.fillStyle=C.overalls; ctx.fillRect(x+2,y+13,5,6+(lo>0?lo:0));
-  ctx.fillStyle=C.shoe;     ctx.fillRect(x+1,y+18+(lo>0?lo:0),7,3);
-  // Right leg
-  ctx.fillStyle=C.overalls; ctx.fillRect(x+9,y+13,5,6+(lo<0?-lo:0));
-  ctx.fillStyle=C.shoe;     ctx.fillRect(x+8,y+18+(lo<0?-lo:0),7,3);
 }
 
 function drawScoreFloats(){
@@ -731,10 +684,13 @@ function drawHUD(){
   ctx.fillStyle='rgba(0,0,0,0.52)'; ctx.fillRect(0,0,W,24);
   ctx.textBaseline='middle';
 
-  // Lives: 天斗×3
+  // Lives: キャラアイコン + 天斗×3
+  if(charImg.complete && charImg.naturalWidth>0){
+    ctx.drawImage(charImg, 0,0,1952,2198, 4,2,14,16);
+  }
   ctx.font='bold 9px monospace';
   ctx.fillStyle='#FFD700'; ctx.textAlign='left';
-  ctx.fillText(`天斗×${lives}`, 6, 12);
+  ctx.fillText(`天斗×${lives}`, 20, 12);
 
   // Score
   ctx.fillStyle='#aaa'; ctx.textAlign='center';
