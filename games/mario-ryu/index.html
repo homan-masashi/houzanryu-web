@@ -788,10 +788,12 @@ function startGame() {
 }
 document.getElementById('startBtn').onclick=startGame;
 
+// タイトル画面でもゲーム世界を表示するため事前初期化
+level=makeLevel(); player=makePlayer();
+
 // ── Loop ─────────────────────────────────────────────────────────
 function loop() {
-  update();
-  draw();
+  try { update(); draw(); } catch(e) { console.error(e); }
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
